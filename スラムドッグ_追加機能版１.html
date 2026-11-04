@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>スラムドッグ</title>
+<style>
+:root{color-scheme:dark;--gold:#f2c56b;--panel:#1b1b20;--line:#555}
+*{box-sizing:border-box}body{margin:auto;padding:18px;max-width:1000px;background:#101014;color:#f5f3ed;font-family:Meiryo,"Yu Gothic",sans-serif;line-height:1.55}
+h1{color:var(--gold)}h2,h3{margin:.2em 0 .6em}button{background:#303039;color:#fff;border:1px solid #686875;border-radius:7px;padding:10px 14px;margin:4px;cursor:pointer;font-size:15px}button:hover{background:#484854}button:disabled{opacity:.4;cursor:not-allowed}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0}.hidden{display:none!important}
+#status{display:flex;gap:7px;flex-wrap:wrap}.stat{background:#2a2a33;border-radius:5px;padding:5px 9px;font-size:14px}
+#menu{display:flex;gap:5px;flex-wrap:wrap}#menu button{min-width:145px}
+#log{height:180px;overflow:auto;background:#08080b;border:1px solid #444;padding:10px;border-radius:7px}.logline{border-bottom:1px solid #1d1d22;padding:2px 0}.good{color:#9ce3a0}.bad{color:#ff9292}.gold{color:var(--gold)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.art{display:flex;align-items:center;justify-content:center;min-height:240px;background:radial-gradient(ellipse,#343440,#17171c 70%);border-radius:8px;overflow:hidden}.art svg{width:min(100%,270px);height:270px}.battle-art{min-height:260px}.battle-art svg{width:min(100%,310px);height:290px}
+.bar{height:12px;background:#444;border-radius:20px;overflow:hidden;margin:5px 0 10px}.bar span{display:block;height:100%;background:#b94c54}.bar.hunger span{background:#d7a348}.muted{color:#bdbdc6;font-size:13px}.slot{padding:8px;border-bottom:1px solid #393941}
+@media(max-width:560px){body{padding:9px}.panel{padding:10px}button{font-size:14px}.art svg{height:230px}}
+</style></head>
+<body>
+<div id="title" class="panel">
+<h1>🐶 スラムドッグ</h1><p>30日以内にスラムボスを倒せ！</p>
+<p>仕事で稼ぎ、食料を確保し、装備を整えてスラムの頂点を目指そう。</p>
+<button onclick="startGame()">はじめから</button><button id="titleLoad" onclick="loadGame()">セーブをロード</button>
+<p class="muted">セーブデータはこのブラウザに保存されます。音楽はゲーム開始後に有効になります。</p>
+</div>
+<div id="game" class="hidden">
+<h2 id="screenTitle">自分の小屋</h2><div id="status" class="panel"></div>
+<div id="scene" class="panel"></div><div id="menu"></div>
+<div id="log" aria-live="polite"></div>
+<div class="panel"><button onclick="saveGame()">セーブ</button><button onclick="loadGame()">ロード</button><button id="musicBtn" onclick="toggleMusic()">音楽：ON</button><button onclick="showHome()">小屋へ</button></div>
+</div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const SAVE_KEY="slumdog_save_v2";
+let player=null,enemy=null,gameOver=false,battle=false,bossDefeated=false,screen="home",musicOn=true,audioCtx=null,musicTimer=null,musicStep=0;
+const DOG_ART=`<svg viewBox="0 0 240 280" role="img" aria-label="主人公ドッグの立ち絵"><defs><linearGradient id="fur" x2="1" y2="1"><stop stop-color="#d5a36c"/><stop offset="1" stop-color="#8c5a35"/></linearGradient></defs><ellipse cx="120" cy="261" rx="68" ry="10" fill="#09090c" opacity=".7"/><path d="M73 83 Q42 44 53 18 Q86 23 99 64 M145 64 Q162 23 193 18 Q203 52 171 85" fill="#6b402d" stroke="#37271f" stroke-width="5"/><path d="M79 75 Q60 48 65 37 Q84 46 96 74 M151 74 Q166 46 184 37 Q187 54 167 77" fill="#d58b76"/><path d="M73 84 Q82 56 120 56 Q160 57 169 86 L163 139 Q155 171 120 171 Q85 171 77 139Z" fill="url(#fur)" stroke="#37271f" stroke-width="5"/><ellipse cx="100" cy="105" rx="7" ry="10" fill="#17151a"/><ellipse cx="141" cy="105" rx="7" ry="10" fill="#17151a"/><circle cx="102" cy="102" r="2.5" fill="#fff"/><circle cx="143" cy="102" r="2.5" fill="#fff"/><ellipse cx="120" cy="131" rx="26" ry="19" fill="#e8cba5"/><path d="M111 122 Q120 113 129 122 Q126 132 120 132 Q114 132 111 122" fill="#252026"/><path d="M120 133 Q114 144 105 137 M120 133 Q126 144 135 137" fill="none" stroke="#4a2b24" stroke-width="3" stroke-linecap="round"/><path d="M83 169 Q120 151 157 169 L174 228 L153 241 L144 201 L145 253 L96 253 L96 202 L85 241 L65 228Z" fill="#566b72" stroke="#20272b" stroke-width="5"/><path d="M88 176 L120 196 L151 176" fill="none" stroke="#d4b58d" stroke-width="8"/><path d="M96 250 L95 266 L119 266 L123 250 M131 250 L135 266 L159 266 L147 250" fill="#302b30" stroke="#171519" stroke-width="4"/><path d="M72 190 Q53 205 67 225 L82 224 M159 190 Q180 204 168 226 L155 223" fill="url(#fur)" stroke="#37271f" stroke-width="5"/><path d="M103 185 L137 185 L132 211 L108 211Z" fill="#a43f38"/><path d="M112 188 L128 188 L125 205 L115 205Z" fill="#e4b45f"/></svg>`;
+function enemyArt(name){
+ if(name==="スラムボス")return `<svg viewBox="0 0 260 280" role="img" aria-label="スラムボスの立ち絵"><ellipse cx="130" cy="264" rx="76" ry="10" fill="#050507"/><path d="M68 92 L42 34 L92 63 L116 36 L143 60 L189 28 L182 100" fill="#29242b" stroke="#111" stroke-width="7"/><path d="M68 92 Q75 53 128 54 Q183 55 192 95 L179 150 Q163 177 130 177 Q95 177 80 150Z" fill="#9b795e" stroke="#211a19" stroke-width="6"/><path d="M84 94 L111 104 M147 104 L175 92" stroke="#ed5148" stroke-width="9"/><path d="M109 130 L151 130 L130 147Z" fill="#181316"/><path d="M75 170 L185 170 L212 239 L171 251 L158 209 L160 259 L98 259 L101 209 L83 251 L47 239Z" fill="#40303a" stroke="#171317" stroke-width="7"/><path d="M88 180 L130 211 L172 180" fill="none" stroke="#bd3c38" stroke-width="12"/><path d="M97 254 L93 270 L122 270 L128 254 M140 254 L145 270 L174 270 L162 254" fill="#191519" stroke="#09090b" stroke-width="4"/></svg>`;
+ if(name==="チンピラ")return `<svg viewBox="0 0 240 280" role="img" aria-label="チンピラの立ち絵"><ellipse cx="120" cy="262" rx="64" ry="9" fill="#050507"/><path d="M72 66 L50 28 L101 48 L137 35 L180 21 L170 78" fill="#282128" stroke="#111" stroke-width="5"/><path d="M76 78 Q82 53 120 53 Q158 53 166 82 L159 130 Q150 157 120 157 Q90 157 81 130Z" fill="#b88b63" stroke="#32231e" stroke-width="5"/><path d="M92 93 L109 98 M133 98 L150 92" stroke="#171419" stroke-width="6"/><path d="M104 126 L136 126" stroke="#44211f" stroke-width="5"/><path d="M80 158 L160 158 L181 226 L153 240 L143 199 L146 255 L96 255 L98 199 L87 240 L60 226Z" fill="#6d4545" stroke="#292027" stroke-width="5"/><path d="M97 170 L120 189 L144 170" fill="none" stroke="#d6b58a" stroke-width="6"/><path d="M96 251 L94 267 L119 267 L123 251 M132 251 L136 267 L161 267 L146 251" fill="#252126" stroke="#111" stroke-width="4"/></svg>`;
+ return `<svg viewBox="0 0 240 280" role="img" aria-label="${name}の立ち絵"><ellipse cx="120" cy="262" rx="65" ry="9" fill="#050507"/><path d="M71 85 Q48 53 59 24 Q89 35 99 72 M144 72 Q163 34 188 24 Q199 56 168 86" fill="#5e493e" stroke="#231d1a" stroke-width="5"/><path d="M75 80 Q83 54 120 55 Q157 55 165 82 L158 137 Q150 164 120 164 Q90 164 82 137Z" fill="#a9815b" stroke="#2b211d" stroke-width="5"/><circle cx="101" cy="103" r="6" fill="#171419"/><circle cx="139" cy="103" r="6" fill="#171419"/><ellipse cx="120" cy="128" rx="18" ry="13" fill="#d8b48b"/><ellipse cx="120" cy="124" rx="7" ry="5" fill="#1a1518"/><path d="M82 164 L158 164 L177 229 L151 239 L142 198 L145 254 L95 254 L98 198 L88 239 L62 229Z" fill="#62615b" stroke="#292925" stroke-width="5"/><path d="M95 251 L93 267 L119 267 L123 251 M132 251 L136 267 L161 267 L146 251" fill="#252126" stroke="#111" stroke-width="4"/></svg>`;
+}
+function startGame(){
+ player={name:"ドッグ",level:1,xp:0,nextXp:20,hp:50,maxHp:50,gold:20,baseAtk:5,baseDef:2,atk:5,def:2,day:1,hunger:100,bread:2,potions:0,weapon:"なし",armor:"ボロ布",weapons:["なし"],armors:["ボロ布"],};
+ enemy=null;gameOver=false;battle=false;bossDefeated=false;screen="home";
+ $("title").classList.add("hidden");$("game").classList.remove("hidden");$("log").innerHTML="";
+ log("ドッグはスラムへ流れ着いた。30日以内にスラムボスを倒そう！");
+ startAudio();showHome();updateStatus();
+}
+function log(message,kind=""){const line=document.createElement("div");line.className="logline "+kind;line.textContent=message;$("log").appendChild(line);$("log").scrollTop=$("log").scrollHeight}
+function updateStatus(){
+ if(!player)return;$("status").innerHTML="";
+ const items=[`DAY ${player.day}/30`,`Lv ${player.level}（EXP ${player.xp}/${player.nextXp}）`,`HP ${player.hp}/${player.maxHp}`,`空腹度 ${player.hunger}/100`,`所持金 ${player.gold}G`,`攻撃 ${player.atk}`,`防御 ${player.def}`,`パン ${player.bread}`,`回復薬 ${player.potions}`,`武器：${player.weapon}`,`防具：${player.armor}`];
+ items.forEach(t=>{const s=document.createElement("span");s.className="stat";s.textContent=t;$("status").appendChild(s)});
+}
+function setScreen(title,description,buttons,sceneHTML=null){
+ $("screenTitle").textContent=title;$("scene").innerHTML=sceneHTML===null?"" : sceneHTML;
+ if(sceneHTML===null)$("scene").textContent=description;else{const p=document.createElement("p");p.textContent=description;$("scene").prepend(p)}
+ $("menu").innerHTML="";buttons.forEach(([label,fn,disabled=false])=>{const b=document.createElement("button");b.textContent=label;b.onclick=fn;b.disabled=disabled;$("menu").appendChild(b)});
+ updateStatus();
+}
+function consumeDay(){
+ if(gameOver)return false;
+ player.day++;player.hunger=Math.max(0,player.hunger-10);
+ if(player.hunger<=0){player.hunger=0;updateStatus();endGame(false,"空腹度が0になった。ドッグは飢えで倒れてしまった……");return false}
+ if(player.day>30){endGame(false,"30日が過ぎた。スラムボスを倒せず、街を去ることになった……");return false}
+ updateStatus();return true;
+}
+function showHome(){
+ if(gameOver)return;battle=false;screen="home";
+ setScreen("自分の小屋","小屋で準備を整えよう。行動すると空腹度が10減る。パンはアイテム画面で食べられる。",[
+ ["スラムへ行く",showSlum],["店へ行く",showShop],["ボスの屋敷",showBoss],["休む（HP+15）",sleep],["ステータス・アイテム",showStatusScreen]
+ ],`<div class="two"><div><div class="art">${DOG_ART}</div><h3>ドッグ</h3><p class="muted">使い古した服を着た、スラムに流れ着いた犬人間。小さな勇気と大きな胃袋を持つ。</p></div><div><h3>今日の状態</h3><p>HP</p><div class="bar"><span style="width:${player.hp/player.maxHp*100}%"></span></div><p>空腹度</p><div class="bar hunger"><span style="width:${player.hunger}%"></span></div><p>レベル ${player.level} / 次のレベルまで EXP ${Math.max(0,player.nextXp-player.xp)}</p><p class="muted">セーブは画面下の「セーブ」から。ブラウザ内に保存されます。</p></div></div>`);
+}
+function sleep(){if(gameOver||battle)return;const before=player.hp;player.hp=Math.min(player.maxHp,player.hp+15);log(`休息した。HPが${player.hp-before}回復した。`,"good");if(consumeDay())showHome()}
+function showSlum(){if(gameOver||battle)return;screen="slum";setScreen("スラム","仕事で稼ぐか、探索して敵と戦おう。", [["仕事をする",work],["探索する",findEnemy],["小屋へ戻る",showHome]])}
+function work(){if(gameOver||battle)return;const earn=Math.floor(Math.random()*11)+10;player.gold+=earn;log(`仕事をして${earn}G稼いだ。`,"gold");if(consumeDay())showSlum()}
+function showShop(){if(gameOver||battle)return;screen="shop";setScreen("店","買った装備はステータス画面から変更できる。",[
+ ["パンを買う（5G）",buyBread,player.gold<5],["回復薬を買う（12G）",buyPotion,player.gold<12],
+ ["木の棒（25G・攻撃+3）",()=>buyWeapon("木の棒",25,3),player.gold<25||player.weapons.includes("木の棒")],
+ ["鉄のナックル（55G・攻撃+6）",()=>buyWeapon("鉄のナックル",55,6),player.gold<55||player.weapons.includes("鉄のナックル")],
+ ["革の防具（30G・防御+2）",()=>buyArmor("革の防具",30,2),player.gold<30||player.armors.includes("革の防具")],
+ ["小屋へ戻る",showHome]])}
+function buyBread(){if(player.gold<5)return;player.gold-=5;player.bread++;log("パンを1個買った。","good");showShop()}
+function buyPotion(){if(player.gold<12)return;player.gold-=12;player.potions++;log("回復薬を1個買った。","good");showShop()}
+function buyWeapon(name,cost,bonus){if(player.gold<cost||player.weapons.includes(name))return;player.gold-=cost;player.weapons.push(name);log(`${name}を購入した。ステータス画面で装備しよう。`,"good");showShop()}
+function buyArmor(name,cost,bonus){if(player.gold<cost||player.armors.includes(name))return;player.gold-=cost;player.armors.push(name);log(`${name}を購入した。ステータス画面で装備しよう。`,"good");showShop()}
+function recalc(){const wb={"なし":0,"木の棒":3,"鉄のナックル":6},ab={"ボロ布":0,"革の防具":2};player.atk=player.baseAtk+(wb[player.weapon]||0)+(player.level-1);player.def=player.baseDef+(ab[player.armor]||0)+Math.floor((player.level-1)/2)}
+function showStatusScreen(){
+ if(gameOver||battle)return;screen="status";
+ const weaponOptions=player.weapons.map(w=>`<option ${w===player.weapon?"selected":""}>${w}</option>`).join("");
+ const armorOptions=player.armors.map(w=>`<option ${w===player.armor?"selected":""}>${w}</option>`).join("");
+ setScreen("ステータス・アイテム","装備変更は即時反映。アイテムを使うと空腹度やHPを回復できる。",[
+ ["パンを食べる（空腹度+20）",useBread,player.bread<1||player.hunger>=100],
+ ["回復薬を使う（HP+25）",usePotionOutside,player.potions<1||player.hp>=player.maxHp],
+ ["小屋へ戻る",showHome]
+ ],`<div class="two"><div><div class="art">${DOG_ART}</div><h3>ドッグ　Lv.${player.level}</h3><p>経験値：${player.xp}/${player.nextXp}</p><p>HP：${player.hp}/${player.maxHp}</p><p>攻撃力：${player.atk}　防御力：${player.def}</p><p>空腹度：${player.hunger}/100　所持金：${player.gold}G</p></div><div><h3>装備変更</h3><label>武器 <select id="weaponSelect">${weaponOptions}</select></label><button onclick="equipWeapon()">武器を装備</button><br><label>防具 <select id="armorSelect">${armorOptions}</select></label><button onclick="equipArmor()">防具を装備</button><h3>所持アイテム</h3><div class="slot">パン：${player.bread}個 — 空腹度を20回復</div><div class="slot">回復薬：${player.potions}個 — HPを25回復</div><p class="muted">レベルアップで最大HP・攻撃力・防御力が上がり、HPも全回復します。</p></div></div>`);
+}
+function equipWeapon(){const v=$("weaponSelect").value;if(!player.weapons.includes(v))return;player.weapon=v;recalc();log(`${v}を装備した。`,"good");showStatusScreen()}
+function equipArmor(){const v=$("armorSelect").value;if(!player.armors.includes(v))return;player.armor=v;recalc();log(`${v}を装備した。`,"good");showStatusScreen()}
+function useBread(){
+ if(player.bread<1||player.hunger>=100)return;player.bread--;const old=player.hunger;player.hunger=Math.min(100,player.hunger+20);log(`パンを食べて空腹度が${player.hunger-old}回復した。`,"good");playSfx("eat");showStatusScreen()
+}
+function usePotionOutside(){if(player.potions<1||player.hp>=player.maxHp)return;player.potions--;const old=player.hp;player.hp=Math.min(player.maxHp,player.hp+25);log(`回復薬でHPが${player.hp-old}回復した。`,"good");playSfx("heal");showStatusScreen()}
+function findEnemy(){if(gameOver||battle)return;const pool=[{name:"野良犬",hp:18,atk:5,def:0,gold:10,xp:12},{name:"チンピラ",hp:25,atk:7,def:1,gold:16,xp:18},{name:"用心棒",hp:34,atk:9,def:2,gold:24,xp:25}];const base=pool[Math.floor(Math.random()*pool.length)];enemy={...base,maxHp:base.hp};battle=true;screen="battle";log(`${enemy.name}が現れた！`,"bad");playSfx("encounter");showBattle()}
+function showBattle(){
+ if(gameOver||!enemy)return;screen="battle";
+ const art=enemyArt(enemy.name);
+ setScreen(`戦闘：${enemy.name}`,`敵HP ${enemy.hp}/${enemy.maxHp}　敵の攻撃 ${enemy.atk}`,[
+ ["攻撃する",attack],["パンを食べる（空腹度+20）",eatBread,player.bread<1||player.hunger>=100],
+ ["回復薬を使う（HP+25）",usePotion,player.potions<1||player.hp>=player.maxHp],["逃げる",runAway]
+ ],`<div class="two"><div><h3>ドッグ　Lv.${player.level}</h3><div class="art battle-art">${DOG_ART}</div><p>HP ${player.hp}/${player.maxHp}</p><div class="bar"><span style="width:${player.hp/player.maxHp*100}%"></span></div><p>空腹度 ${player.hunger}/100</p><div class="bar hunger"><span style="width:${player.hunger}%"></span></div></div><div><h3>${enemy.name}</h3><div class="art battle-art">${art}</div><p>HP ${enemy.hp}/${enemy.maxHp}</p><div class="bar"><span style="width:${Math.max(0,enemy.hp)/enemy.maxHp*100}%"></span></div><p>攻撃 ${enemy.atk}　防御 ${enemy.def}</p></div></div>`);
+}
+function attack(){if(!battle||gameOver||!enemy)return;const damage=Math.max(1,player.atk+Math.floor(Math.random()*4)-enemy.def);enemy.hp-=damage;log(`ドッグの攻撃！ ${enemy.name}に${damage}ダメージ。`,"good");playSfx("hit");if(enemy.hp<=0){winBattle();return}enemyTurn();if(!gameOver&&battle)showBattle()}
+function enemyTurn(){const damage=Math.max(1,enemy.atk+Math.floor(Math.random()*3)-player.def);player.hp-=damage;log(`${enemy.name}の攻撃！ ${damage}ダメージを受けた。`,"bad");playSfx("hurt");if(player.hp<=0){player.hp=0;endGame(false,"ドッグは力尽きた……");return}updateStatus()}
+function gainXp(amount){player.xp+=amount;while(player.xp>=player.nextXp){player.xp-=player.nextXp;player.level++;player.nextXp=Math.floor(player.nextXp*1.35);player.maxHp+=8;player.hp=player.maxHp;recalc();log(`レベルアップ！ Lv.${player.level}になった！ 最大HP+8、HP全回復！`,"gold");playSfx("level")}}
+function winBattle(){const defeated=enemy;player.gold+=defeated.gold;gainXp(defeated.xp);log(`${defeated.name}を倒した！ ${defeated.gold}GとEXP ${defeated.xp}を獲得。`,"good");enemy=null;battle=false;playSfx("win");if(defeated.boss){bossDefeated=true;endGame(true,"おめでとう！30日以内にスラムボスを倒し、スラムの英雄となった！");return}if(consumeDay())showSlum()}
+function eatBread(){if(!battle||player.bread<1||player.hunger>=100)return;player.bread--;const old=player.hunger;player.hunger=Math.min(100,player.hunger+20);log(`パンを食べて空腹度が${player.hunger-old}回復した。`,"good");playSfx("eat");enemyTurn();if(!gameOver&&battle)showBattle()}
+function usePotion(){if(!battle||player.potions<1||player.hp>=player.maxHp)return;player.potions--;const old=player.hp;player.hp=Math.min(player.maxHp,player.hp+25);log(`回復薬でHPが${player.hp-old}回復した。`,"good");playSfx("heal");enemyTurn();if(!gameOver&&battle)showBattle()}
+function runAway(){if(!battle||gameOver)return;if(Math.random()<.7){log("うまく逃げ切った。");enemy=null;battle=false;showSlum()}else{log("逃げられなかった！","bad");enemyTurn();if(!gameOver&&battle)showBattle()}}
+function showBoss(){if(gameOver||battle)return;if(bossDefeated){setScreen("ボスの屋敷","スラムボスはすでに倒した。街に平和が戻った。",[["小屋へ戻る",showHome]]);return}if(player.day<10){setScreen("ボスの屋敷","門番：「ボスに会いたければ、もっと力をつけてこい！」（10日目から挑戦可能）",[["小屋へ戻る",showHome],["スラムで鍛える",showSlum]]);return}enemy={name:"スラムボス",hp:75,maxHp:75,atk:12,def:3,gold:100,xp:60,boss:true};battle=true;log("ついにスラムボスが姿を現した！","bad");playSfx("encounter");showBattle()}
+function endGame(win,message){gameOver=true;battle=false;enemy=null;stopMusic();playSfx(win?"win":"gameover");screen="end";setScreen(win?"勝利！":"ゲームオーバー",message,[["タイトルへ戻る",backToTitle],["もう一度遊ぶ",startGame]]);log(message,win?"good":"bad")}
+function backToTitle(){stopMusic();player=null;enemy=null;gameOver=false;battle=false;$("game").classList.add("hidden");$("title").classList.remove("hidden");$("titleLoad").disabled=!hasSave()}
+function hasSave(){try{return !!localStorage.getItem(SAVE_KEY)}catch(e){return false}}
+function saveGame(){if(!player){alert("セーブできるデータがありません。");return}const data={player,enemy,battle,bossDefeated,gameOver,screen};try{localStorage.setItem(SAVE_KEY,JSON.stringify(data));log("セーブしました。","good");playSfx("save");$("titleLoad").disabled=false}catch(e){alert("セーブに失敗しました。ブラウザの保存設定を確認してください。")}}
+function loadGame(){
+ let raw;try{raw=localStorage.getItem(SAVE_KEY)}catch(e){raw=null}
+ if(!raw){alert("セーブデータがありません。");return}
+ try{const d=JSON.parse(raw);if(!d.player||typeof d.player.hp!=="number")throw Error("invalid");player=d.player;enemy=d.enemy||null;battle=!!d.battle;bossDefeated=!!d.bossDefeated;gameOver=!!d.gameOver;screen=d.screen||"home";$("title").classList.add("hidden");$("game").classList.remove("hidden");$("log").innerHTML="";log("セーブデータをロードしました。","good");startAudio();if(gameOver){endGame(bossDefeated,"セーブデータのエンディング状態を復元しました。")}else if(battle&&enemy){showBattle()}else if(screen==="status"){showStatusScreen()}else if(screen==="shop"){showShop()}else if(screen==="slum"){showSlum()}else showHome();updateStatus()}catch(e){alert("セーブデータを読み込めませんでした。")}
+}
+function toggleMusic(){musicOn=!musicOn;$("musicBtn").textContent="音楽："+(musicOn?"ON":"OFF");if(musicOn)startMusic();else stopMusic()}
+function getAudio(){if(!audioCtx){const AC=window.AudioContext||window.webkitAudioContext;if(AC)audioCtx=new AC()}if(audioCtx&&audioCtx.state==="suspended")audioCtx.resume();return audioCtx}
+function tone(freq,duration,type="sine",volume=.035,delay=0){const c=getAudio();if(!c)return;const o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(.0001,c.currentTime+delay);g.gain.exponentialRampToValueAtTime(volume,c.currentTime+delay+.02);g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+delay+duration);o.connect(g);g.connect(c.destination);o.start(c.currentTime+delay);o.stop(c.currentTime+delay+duration+.03)}
+function playSfx(kind){try{if(kind==="hit"){tone(180,.09,"square",.05);tone(95,.12,"sawtooth",.035,.04)}else if(kind==="hurt"){tone(110,.18,"triangle",.05)}else if(kind==="eat"){tone(440,.07);tone(550,.09,"sine",.03,.08)}else if(kind==="heal"){tone(520,.12);tone(660,.18,"sine",.03,.12)}else if(kind==="level"){[523,659,784].forEach((f,i)=>tone(f,.18,"triangle",.04,i*.12))}else if(kind==="win"){[392,494,587,784].forEach((f,i)=>tone(f,.25,"triangle",.04,i*.13))}else if(kind==="gameover"){[392,330,262].forEach((f,i)=>tone(f,.3,"sine",.04,i*.2))}else if(kind==="encounter"){tone(130,.18,"sawtooth",.05);tone(98,.2,"sawtooth",.04,.16)}else if(kind==="save"){tone(660,.08);tone(880,.1,"sine",.03,.09)}}catch(e){}}
+function startAudio(){getAudio();if(musicOn)startMusic()}
+function startMusic(){if(!musicOn||musicTimer)return;const notes=[196,0,233,0,174,0,262,233,0,196,0,147,0,174,0,233];musicTimer=setInterval(()=>{if(musicOn&&audioCtx){const f=notes[musicStep%notes.length];if(f)tone(f,.22,"triangle",.012);musicStep++}},330)}
+function stopMusic(){if(musicTimer){clearInterval(musicTimer);musicTimer=null}}
+$("titleLoad").disabled=!hasSave();
+</script></body></html>
